@@ -1,0 +1,181 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px #ver si quitar, aun no lo enseñan
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
+#--------------------------------------------------------------------
+                    # Cargar datos
+#--------------------------------------------------------------------
+df = pd.read_csv(r"G:\Mi unidad\Magister\Unidad 9 Instrumentos visualización de datos\Desafio 2\MDAS-HVD_EVAL_2_Datos.csv")
+
+
+#--------------------------------------------------------------------
+                    # Mapear nombres descriptivos
+#--------------------------------------------------------------------
+sobrevive_dic = {0: "No", 1: "Sí"}
+pclass_dic = {1: "Primera clase", 2: "Segunda clase", 3: "Tercera clase"}
+df['Supervivencia'] = df['Survived'].map(sobrevive_dic)
+df['Clase'] = df['Pclass'].map(pclass_dic)
+
+
+st.sidebar.image(
+    "https://upload.wikimedia.org/wikipedia/commons/f/fd/RMS_Titanic_3.jpg",
+    caption="Titanic",
+    use_column_width=True
+)
+
+
+# Barra lateral con botones
+opcion = st.sidebar.radio(
+    "Selecciona una visualización:",
+    ["Proporción por clase", "Distribución de edad", "PCA 3D"]
+)
+
+st.sidebar.image(
+    "https://upload.wikimedia.org/wikipedia/commons/9/9b/Titanic_wreck_bow.jpg",
+    caption="Proa del pecio del RMS Titanic (2004)",
+    use_column_width=True
+)
+
+
+st.title("Exploración de Datos del Titanic")
+
+if opcion == "Proporción por clase":
+    #---------------------------------------------------------------------
+    # Sección 1: Proporción de sobrevivientes según la clase del pasajero
+    #---------------------------------------------------------------------
+
+    # Crear botones
+    if "agrupador" not in st.session_state:
+        st.session_state.agrupador = "Clase"
+
+    st.header("1. Proporción de sobrevivientes según la clase del pasajero")
+
+    st.markdown(f"###### Selecciona una opción para cambiar la agrupación del gráfico.")
+    st.markdown(f"###### Actualmente agrupando por: **{st.session_state.agrupador}**")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Agrupar por clase"):
+            st.session_state.agrupador = "Clase"
+    with col2:
+        if st.button("Agrupar por género"):
+            st.session_state.agrupador = "Sex"
+
+    base = st.session_state.agrupador
+
+    sobrevive_x_base = df.groupby([base, 'Supervivencia']).size().reset_index(name='contar')
+    total_x_base = df.groupby(base).size().reset_index(name='total')
+    sovrevive_prop = sobrevive_x_base.merge(total_x_base, on=base)
+    sovrevive_prop['proporcion'] = sovrevive_prop['contar'] / sovrevive_prop['total']
+
+    # Gráfico estático
+    st.subheader("Gráfico estático")
+    fig1, ax1 = plt.subplots()
+    fig1.patch.set_facecolor('#adb5bd')  # Fondo del gráfico
+    ax1.set_facecolor('#ced4da')  # Fondo del área de dibujo
+    sns.barplot(data=sovrevive_prop, x=base, y='proporcion', hue='Supervivencia', ax=ax1,palette={'Sí': '#7209b7', 'No': '#4895ef'})
+    ax1.set_title("Proporción de sobrevivientes por clase")
+    ax1.set_ylabel("Proporción")
+    ax1.set_xlabel("Clase del pasajero")
+
+    # Agregar etiquetas sobre las barras
+    for container in ax1.containers:
+        ax1.bar_label(container, fmt='%.2f', label_type='edge', padding=3)
+
+    st.pyplot(fig1)
+
+    # Gráfico interactivo
+    st.subheader("Gráfico interactivo")
+    fig2 = px.bar(sovrevive_prop, x=base, y='proporcion', color='Supervivencia', barmode='group',
+                title="Proporción de sobrevivientes por clase (interactivo)",
+                color_discrete_map={'Sí': '#7209b7', 'No': '#4895ef'}
+                )
+    st.plotly_chart(fig2)
+
+
+    #---------------------------------------------------------------------
+    # Sección 2: Distribución de edad según sobrevivencia
+    #---------------------------------------------------------------------
+elif opcion == "Distribución de edad":
+    st.header("2. Distribución de edad según sobrevivencia")
+
+    # Gráfico por edad
+    st.subheader("Gráfico distribución por edad")
+    fig3, ax3 = plt.subplots()
+    fig3.patch.set_facecolor('#adb5bd')  # Fondo del gráfico
+    ax3.set_facecolor('#ced4da')  # Fondo del área de dibujo
+    sns.histplot(data=df, x='Age', hue='Supervivencia', kde=True, element='step', bins=30, ax=ax3,palette={'Sí': '#7209b7', 'No': '#4895ef'})
+    ax3.set_title("Distribución de edad según sobrevivencia")
+    ax3.set_xlabel("Edad")
+    ax3.set_ylabel("Cantidad")
+    st.pyplot(fig3)
+
+    # Gráfico interactivo
+
+    st.subheader("Histograma interactivo")
+
+    modo = st.radio(
+        "¿Cómo deseas visualizar la distribución?",
+        options=["Total", "Dividido por género"]
+    )
+
+    if modo == "Total":
+        fig4 = px.histogram(df, x='Age', color='Supervivencia', nbins=30,
+                            title="Distribución de edad según sobrevivencia",
+                            color_discrete_map={'Sí': '#7209b7', 'No': '#4895ef'})
+    else:
+        fig4 = px.histogram(df, x='Age', color='Supervivencia', nbins=30,facet_col='Sex',
+                            title="Distribución de edad según sobrevivencia",
+                            color_discrete_map={'Sí': '#7209b7', 'No': '#4895ef'})        
+
+    fig4.update_layout(
+        xaxis_title="Edad",        
+        yaxis_title= "Cantidad"
+    )
+
+    if modo != "Total":
+        fig4.update_layout(xaxis2_title="Edad")
+
+    fig4.for_each_annotation(lambda a: a.update(
+        text=a.text.replace("Sex=male", "Hombre").replace("Sex=female", "Mujer")
+        )
+    )
+    
+    st.plotly_chart(fig4)
+
+    #---------------------------------------------------------------------
+    # Sección 3: Distribución de edad según sobrevivencia
+    #---------------------------------------------------------------------
+elif opcion == "PCA 3D":
+    st.header("3. Análisis de Componentes Principales (PCA) 3D")
+
+    grupo = st.radio("Selecciona el grupo:", ("General","Sobrevive", "No Sobrevive"))
+    if grupo =="General":
+        df_pca = df.copy()
+    elif grupo == "Sobrevive":
+        df_pca = df[df['Supervivencia'] == "Sí"]
+    else:
+        df_pca = df[df['Supervivencia'] == "No"]
+
+    # Variables numéricas y limpieza
+    df_pca_limpio = df_pca[['Age', 'SibSp', 'Parch', 'Fare']].dropna()
+    scaler = StandardScaler()
+    scaled_data = scaler.fit_transform(df_pca_limpio)
+
+    # PCA 3D
+    pca = PCA(n_components=3)
+    pca_result = pca.fit_transform(scaled_data)
+    df_pca_viz = pd.DataFrame(data=pca_result, columns=['PC1', 'PC2', 'PC3'])
+
+    fig5 = px.scatter_3d(df_pca_viz, x='PC1', y='PC2', z='PC3',
+                        title=f"PCA 3D - Supervivencia: {grupo}",
+                        opacity=0.7)
+    st.plotly_chart(fig5)
+
+
+
+st.caption("Desarrollado para evaluación Streamlit Titanic - Felipe García Opazo")
